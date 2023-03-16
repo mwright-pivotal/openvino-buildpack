@@ -1,0 +1,38 @@
+FROM  ubuntu:bionic as base
+LABEL maintainer="Mike Wright wrightmi@vmware.com"
+
+# Arguments
+ARG OPENVINO_VERSION=2020.2.120
+
+# Environments
+ENV DEBIAN_FRONTEND=noninteractive
+ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
+ENV PIP_DEFAULT_TIMEOUT=100
+# ========== ADDED ===========
+# 2. Set required CNB information
+ENV CNB_USER_ID=1000
+ENV CNB_GROUP_ID=1000
+ENV CNB_STACK_ID="io.buildpacks.openvino.stacks.bionic"
+LABEL io.buildpacks.stack.id="io.buildpacks.openvino.stacks.bionic"
+
+RUN groupadd cnb --gid ${CNB_GROUP_ID} && \
+  useradd --uid ${CNB_USER_ID} --gid ${CNB_GROUP_ID} -m -s /bin/bash cnb
+
+ARG PACKAGE=intel-openvino-dev-ubuntu18-2020.3.194
+RUN apt update
+RUN apt-get -y install pciutils lshw clinfo freeglut3 freeglut3-dev gnupg2 wget libopencv-dev libssl-dev libffi-dev libgtk2.0-dev pkg-config
+# ========== ADDED ===========
+# 5. Start a new run stage
+FROM base as run
+
+# 6. Set user and group (as declared in base image)
+USER ${CNB_USER_ID}:${CNB_GROUP_ID}
+
+# ========== ADDED ===========
+# 7. Start a new build stage
+FROM base as build
+
+RUN apt-get -y install git
+# ========== ADDED ===========
+# 9. Set user and group (as declared in base image)
+USER ${CNB_USER_ID}:${CNB_GROUP_ID}
