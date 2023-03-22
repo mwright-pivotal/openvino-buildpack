@@ -1,5 +1,8 @@
 # openvino-buildpack
 
+install docker on linux
+download pack cli from buildpacks.io
+
 # Download Openvino Installer from https://storage.openvinotoolkit.org/repositories/openvino/packages/2022.3/linux
 
 ```console

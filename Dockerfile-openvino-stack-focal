@@ -1,0 +1,139 @@
+FROM ubuntu:focal as base
+LABEL maintainer="Mike Wright wrightmi@vmware.com"
+
+# Arguments
+ARG OPENVINO_VERSION=2020.2.120
+
+# Environments
+ENV DEBIAN_FRONTEND=noninteractive
+ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
+ENV PIP_DEFAULT_TIMEOUT=100
+# ========== ADDED ===========
+# 2. Set required CNB information
+ENV CNB_USER_ID=1000
+ENV CNB_GROUP_ID=1000
+ENV CNB_STACK_ID="io.buildpacks.openvino.stacks.focal"
+LABEL io.buildpacks.stack.id="io.buildpacks.openvino.stacks.focal"
+
+RUN groupadd cnb --gid ${CNB_GROUP_ID} && \
+  groupadd render --gid 127 && \
+  useradd --uid ${CNB_USER_ID} --gid ${CNB_GROUP_ID} -G video,audio,render -m -s /bin/bash cnb
+
+# OpenVINO Directories
+ENV OPENVINO_DIR=/openvino
+ENV INSTALL_DIR=/opt/intel
+
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash-completion \
+    ca-certificates \
+    curl \
+    dbus-x11 \
+    gconf-service \
+    gconf2 \
+    git \
+    gnupg \
+    gvfs \
+    libasound2 \
+    libcanberra-gtk-module \
+    libcanberra-gtk3-module \
+    libcap2 \
+    libgconf-2-4 \
+    libgtk2.0-0 \
+    libnotify4 \
+    libnss3 \
+    libx11-xcb-dev \
+    libxkbfile1 \
+    libxss1 \
+    libxtst6 \
+    mpg123 \
+    software-properties-common \
+    sudo \
+    vim \
+    wget \
+    x11-apps \
+    xdg-utils \
+    && \
+    apt-get clean -y && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/archives/
+RUN add-apt-repository -y ppa:intel-opencl/intel-opencl && apt update && apt install -y intel-opencl-icd && ldconfig
+
+# Video Libraries Dependencies
+# hadolint ignore=DL3008,DL3015
+RUN apt-get update && apt-get install -y \
+    fswebcam \
+    libavcodec-dev \
+    libavformat-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libswscale-dev \
+    libtiff-dev \
+    libv4l-dev \
+    v4l-utils \
+    && \
+    apt-get clean -y && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/archives/
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# RUN curl https://bootstrap.pypa.io/get-pip.py | python3
+
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get -y install --no-install-recommends \
+    libkrb5-dev \
+    libprotobuf-dev \
+    libzmq3-dev \
+    protobuf-compiler \
+    && \
+    apt-get clean -y && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/archives/
+
+WORKDIR ${OPENVINO_DIR}
+
+RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+  apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+  echo "deb https://apt.repos.intel.com/openvino/2022 focal main" | sudo tee /etc/apt/sources.list.d/intel-openvino-2022.list && \
+  apt update && apt search openvino && \
+  apt install -y openvino
+
+
+# Install Model Optimizer prerequisites
+ENV OPEN_MODEL_ZOO=${INSTALL_DIR}${OPENVINO_DIR}/deployment_tools
+# RUN ${OPEN_MODEL_ZOO}/model_optimizer/install_prerequisites/install_prerequisites.sh
+
+RUN apt-get clean -y && \
+    apt-get autoremove -y && \
+    rm -rf \
+        /var/lib/apt/lists/* \
+        /var/cache/apt/archives
+
+FROM base as run
+
+#RUN chown root:root /usr/local/lib/intel-opencl/libigdrcl.so
+RUN echo "/usr/lib/x86_64-linux-gnu/intel-opencl/" > /etc/ld.so.conf.d/intel-opencl.conf && ldconfig
+RUN echo "/opt/repo/opencv/build/install/lib/" > /etc/ld.so.conf.d/opencv_4_6_0.conf && ldconfig
+RUN apt update && apt install libffi-dev && \
+  apt-get clean -y && \
+  apt-get autoremove -y && \
+  rm -rf \
+      /var/lib/apt/lists/* \
+      /var/cache/apt/archives
+RUN ln -s /usr/lib/x86_64-linux-gnu/libffi.so.7 /usr/lib/x86_64-linux-gnu/libffi.so.6
+
+RUN ldconfig -p | grep -i intel
+
+# 6. Set user and group (as declared in base image)
+USER ${CNB_USER_ID}:${CNB_GROUP_ID}
+WORKDIR /home/cnb 
+
+# ========== ADDED ===========
+# 7. Start a new build stage
+FROM base as build
+
+RUN apt-get -y install git
+# ========== ADDED ===========
+# 9. Set user and group (as declared in base image)
+USER ${CNB_USER_ID}:${CNB_GROUP_ID}
+WORKDIR /home/cnb
