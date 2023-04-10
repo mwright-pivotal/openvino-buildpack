@@ -1,5 +1,8 @@
-FROM  ubuntu:bionic as base
+FROM ubuntu:bionic  as base
 LABEL maintainer="Mike Wright wrightmi@vmware.com"
+
+# Arguments
+ARG OPENVINO_VERSION=2020.2.120
 
 # Environments
 ENV DEBIAN_FRONTEND=noninteractive
@@ -13,168 +16,117 @@ ENV CNB_STACK_ID="io.buildpacks.openvino.stacks.bionic"
 LABEL io.buildpacks.stack.id="io.buildpacks.openvino.stacks.bionic"
 
 RUN groupadd cnb --gid ${CNB_GROUP_ID} && \
-  useradd --uid ${CNB_USER_ID} --gid ${CNB_GROUP_ID} -m -s /bin/bash cnb
+  groupadd render --gid 127 && \
+  useradd --uid ${CNB_USER_ID} --gid ${CNB_GROUP_ID} -G video,audio,render -m -s /bin/bash cnb
 
-RUN apt update
-RUN apt-get -y install cmake build-essential git pciutils lshw clinfo freeglut3 freeglut3-dev gnupg2 wget libssl-dev libffi-dev libgtk2.0-dev pkg-config \
-  libgtk-3-dev \
-        libpng-dev \
-        libjpeg-dev \
-        libwebp-dev \
-        libtiff5-dev \
-        libopenexr-dev \
-        libopenblas-dev \
-        libx11-dev \
-        libavutil-dev \
-        libavcodec-dev \
-        libavformat-dev \
-        libswscale-dev \
-        libavresample-dev \
-        libtbb2 \
-        libssl-dev \
-        libva-dev \
-        libgstreamer1.0-dev \
-        libgstreamer-plugins-base1.0-dev \
-         libpugixml-dev
+# OpenVINO Directories
+ENV OPENVINO_DIR=/openvino
+ENV INSTALL_DIR=/opt/intel
 
-ARG TEMP_DIR=/tmp/openvino_installer
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash-completion \
+    ca-certificates \
+    curl \
+    dbus-x11 \
+    gconf-service \
+    gconf2 \
+    git \
+    gnupg \
+    gvfs \
+    libasound2 \
+    libcanberra-gtk-module \
+    libcanberra-gtk3-module \
+    libcap2 \
+    libgconf-2-4 \
+    libgtk2.0-0 \
+    libnotify4 \
+    libnss3 \
+    libx11-xcb-dev \
+    libxkbfile1 \
+    libxss1 \
+    libxtst6 \
+    mpg123 \
+    software-properties-common \
+    sudo \
+    vim \
+    wget \
+    x11-apps \
+    xdg-utils \
+    && \
+    apt-get clean -y && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/archives/
+RUN add-apt-repository -y ppa:intel-opencl/intel-opencl && apt update && apt install -y intel-opencl-icd && ldconfig
 
-WORKDIR ${TEMP_DIR}
+# Video Libraries Dependencies
+# hadolint ignore=DL3008,DL3015
+RUN apt-get update && apt-get install -y \
+    fswebcam \
+    libavcodec-dev \
+    libavformat-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libswscale-dev \
+    libtiff-dev \
+    libv4l-dev \
+    v4l-utils \
+    && \
+    apt-get clean -y && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/archives/
 
-COPY openvino_installer/l_openvino_toolkit_ubuntu18_2022.3.0.9052.9752fafe8eb_x86_64.tgz .
-RUN tar -xzf "${TEMP_DIR}"/*.tgz && \
-    OV_BUILD="$(find . -maxdepth 1 -type d -name "*openvino*" | grep -oP '(?<=_)\d+.\d+.\d.\d+')" && \
-    OV_YEAR="$(find . -maxdepth 1 -type d -name "*openvino*" | grep -oP '(?<=_)\d+')" && \
-    OV_FOLDER="$(find . -maxdepth 1 -type d -name "*openvino*")" && \
-    mkdir -p /opt/intel/openvino_"$OV_BUILD"/ && \
-    cp -rf "$OV_FOLDER"/*  /opt/intel/openvino_"$OV_BUILD"/ && \
-    rm -rf "${TEMP_DIR:?}"/"$OV_FOLDER" && \
-    ln --symbolic /opt/intel/openvino_"$OV_BUILD"/ /opt/intel/openvino && \
-    ln --symbolic /opt/intel/openvino_"$OV_BUILD"/ /opt/intel/openvino_"$OV_YEAR" && \
-    rm -rf ${INTEL_OPENVINO_DIR}/tools/workbench && rm -rf ${TEMP_DIR} && \
-    chown -R cnb /opt/intel/openvino_"$OV_BUILD"
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# RUN curl https://bootstrap.pypa.io/get-pip.py | python3
 
-ENV HDDL_INSTALL_DIR=/opt/intel/openvino/runtime/3rdparty/hddl
-ENV InferenceEngine_DIR=/opt/intel/openvino/runtime/cmake
-ENV LD_LIBRARY_PATH=/opt/intel/openvino/runtime/3rdparty/hddl/lib:/opt/intel/openvino/runtime/3rdparty/tbb/lib:/opt/intel/openvino/runtime/lib/intel64:/opt/intel/openvino/tools/compile_tool:/opt/intel/openvino/extras/opencv/lib
-ENV OpenCV_DIR=/opt/intel/openvino/extras/opencv/cmake
-ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ENV PYTHONPATH=/opt/intel/openvino/python/python3.8:/opt/intel/openvino/python/python3:/opt/intel/openvino/extras/opencv/python
-ENV TBB_DIR=/opt/intel/openvino/runtime/3rdparty/tbb/cmake
-ENV ngraph_DIR=/opt/intel/openvino/runtime/cmake
-ENV OpenVINO_DIR=/opt/intel/openvino/runtime/cmake
-ENV INTEL_OPENVINO_DIR=/opt/intel/openvino
-ENV PKG_CONFIG_PATH=/opt/intel/openvino/runtime/lib/intel64/pkgconfig
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get -y install --no-install-recommends \
+    libkrb5-dev \
+    libprotobuf-dev \
+    libzmq3-dev \
+    protobuf-compiler \
+    && \
+    apt-get clean -y && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/archives/
 
-RUN rm -rf ${INTEL_OPENVINO_DIR}/.distribution && mkdir ${INTEL_OPENVINO_DIR}/.distribution && \
-    touch ${INTEL_OPENVINO_DIR}/.distribution/docker
+WORKDIR ${OPENVINO_DIR}
 
-SHELL ["/bin/bash", "-xo", "pipefail", "-c"]
+RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+  apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+  echo "deb https://apt.repos.intel.com/openvino/2022 bionic main" | sudo tee /etc/apt/sources.list.d/intel-openvino-2022.list && \
+  apt update && apt search openvino && \
+  apt install -y openvino
 
-ARG OPENCV_BRANCH="4.6.0"
 
-WORKDIR /opt/repo
-RUN git clone https://github.com/opencv/opencv.git --depth 1 -b ${OPENCV_BRANCH} 
-WORKDIR /opt/repo/opencv
-RUN git fetch origin 4.x:4.x && \
-    git cherry-pick -n 1b1bbe426277715a876878890a3dc88231b871bc
-ARG TEMP_DIR=/tmp/opencl
+# Install Model Optimizer prerequisites
+ENV OPEN_MODEL_ZOO=${INSTALL_DIR}${OPENVINO_DIR}/deployment_tools
+# RUN ${OPEN_MODEL_ZOO}/model_optimizer/install_prerequisites/install_prerequisites.sh
 
-WORKDIR ${INTEL_OPENVINO_DIR}/install_dependencies
-RUN apt -y install curl && ./install_NEO_OCL_driver.sh --no_numa -y 
+RUN apt-get clean -y && \
+    apt-get autoremove -y && \
+    rm -rf \
+        /var/lib/apt/lists/* \
+        /var/cache/apt/archives
 
-WORKDIR /opt/repo/opencv/build
-# hadolint ignore=SC2046
-RUN source "${INTEL_OPENVINO_DIR}"/setupvars.sh; \
-    cmake \
-    -D BUILD_INFO_SKIP_EXTRA_MODULES=ON \
-    -D BUILD_EXAMPLES=OFF \
-    -D BUILD_JASPER=OFF \
-    -D BUILD_JAVA=OFF \
-    -D BUILD_JPEG=ON \
-    -D BUILD_APPS_LIST=version \
-    -D BUILD_opencv_apps=ON \
-    -D BUILD_opencv_java=OFF \
-    -D BUILD_OPENEXR=OFF \
-    -D BUILD_PNG=ON \
-    -D BUILD_TBB=OFF \
-    -D BUILD_WEBP=OFF \
-    -D BUILD_ZLIB=ON \
-    -D WITH_1394=OFF \
-    -D WITH_CUDA=OFF \
-    -D WITH_EIGEN=OFF \
-    -D WITH_GPHOTO2=OFF \
-    -D WITH_GSTREAMER=ON \
-    -D OPENCV_GAPI_GSTREAMER=OFF \
-    -D WITH_GTK_2_X=OFF \
-    -D WITH_IPP=ON \
-    -D WITH_JASPER=OFF \
-    -D WITH_LAPACK=OFF \
-    -D WITH_MATLAB=OFF \
-    -D WITH_MFX=OFF \
-    -D WITH_OPENCLAMDBLAS=OFF \
-    -D WITH_OPENCLAMDFFT=OFF \
-    -D WITH_OPENEXR=OFF \
-    -D WITH_OPENJPEG=OFF \
-    -D WITH_QUIRC=OFF \
-    -D WITH_TBB=OFF \
-    -D WITH_TIFF=OFF \
-    -D WITH_VTK=OFF \
-    -D WITH_WEBP=OFF \
-    -D CMAKE_USE_RELATIVE_PATHS=ON \
-    -D CMAKE_SKIP_INSTALL_RPATH=ON \
-    -D ENABLE_BUILD_HARDENING=ON \
-    -D ENABLE_CONFIG_VERIFICATION=ON \
-    -D ENABLE_PRECOMPILED_HEADERS=OFF \
-    -D ENABLE_CXX11=ON \
-    -D INSTALL_PDB=ON \
-    -D INSTALL_TESTS=ON \
-    -D INSTALL_C_EXAMPLES=OFF \
-    -D INSTALL_PYTHON_EXAMPLES=OFF \
-    -D CMAKE_INSTALL_PREFIX=install \
-    -D OPENCV_SKIP_PKGCONFIG_GENERATION=ON \
-    -D OPENCV_SKIP_PYTHON_LOADER=OFF \
-    -D OPENCV_SKIP_CMAKE_ROOT_CONFIG=ON \
-    -D OPENCV_GENERATE_SETUPVARS=OFF \
-    -D OPENCV_BIN_INSTALL_PATH=bin \
-    -D OPENCV_INCLUDE_INSTALL_PATH=include \
-    -D OPENCV_LIB_INSTALL_PATH=lib \
-    -D OPENCV_CONFIG_INSTALL_PATH=cmake \
-    -D OPENCV_3P_LIB_INSTALL_PATH=3rdparty \
-    -D OPENCV_DOC_INSTALL_PATH=doc \
-    -D OPENCV_OTHER_INSTALL_PATH=etc \
-    -D OPENCV_LICENSES_INSTALL_PATH=etc/licenses \
-    -D OPENCV_INSTALL_FFMPEG_DOWNLOAD_SCRIPT=ON \
-    -D BUILD_opencv_world=OFF \
-    -D BUILD_opencv_python2=OFF \
-    -D BUILD_opencv_python3=ON \
-    -D PYTHON3_PACKAGES_PATH=install/python/python3 \
-    -D PYTHON3_LIMITED_API=ON \
-    -D HIGHGUI_PLUGIN_LIST=all \
-    -D OPENCV_PYTHON_INSTALL_PATH=python \
-    -D CPU_BASELINE=SSE4_2 \
-    -D OPENCV_IPP_GAUSSIAN_BLUR=ON \
-    -D WITH_INF_ENGINE=ON \
-    -D InferenceEngine_DIR="${INTEL_OPENVINO_DIR}"/runtime/cmake/ \
-    -D ngraph_DIR="${INTEL_OPENVINO_DIR}"/runtime/cmake/ \
-    -D INF_ENGINE_RELEASE=2022010000 \
-    -D VIDEOIO_PLUGIN_LIST=ffmpeg,gstreamer,mfx \
-    -D CMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined \
-    -D CMAKE_BUILD_TYPE=Release /opt/repo/opencv && \
-    make -j$(nproc) && make install && \
-    rm -Rf install/bin install/etc/samples
-
-RUN apt -y remove libpugixml1v5 cmake build-essential && apt clean -y && apt autoremove -y
-RUN wget http://mirrors.kernel.org/ubuntu/pool/universe/p/pugixml/libpugixml1v5_1.8.1-7_amd64.deb
-RUN dpkg -i libpugixml1v5_1.8.1-7_amd64.deb
-RUN ldconfig -p
-# ========== ADDED ===========
-# 5. Start a new run stage
 FROM base as run
+
+#RUN chown root:root /usr/local/lib/intel-opencl/libigdrcl.so
+RUN echo "/usr/lib/x86_64-linux-gnu/intel-opencl/" > /etc/ld.so.conf.d/intel-opencl.conf && ldconfig
+RUN echo "/opt/repo/opencv/build/install/lib/" > /etc/ld.so.conf.d/opencv_4_6_0.conf && ldconfig
+RUN apt update && apt install libffi-dev && apt install ocl-icd-opencl-dev -y && \
+  apt-get clean -y && \
+  apt-get autoremove -y && \
+  rm -rf \
+      /var/lib/apt/lists/* \
+      /var/cache/apt/archives
+#RUN ln -s /usr/lib/x86_64-linux-gnu/libffi.so.7 /usr/lib/x86_64-linux-gnu/libffi.so.6
+
+RUN ldconfig -p | grep -i intel
 
 # 6. Set user and group (as declared in base image)
 USER ${CNB_USER_ID}:${CNB_GROUP_ID}
-ENV LD_LIBRARY_PATH=/opt/repo/opencv/build/install/lib/:${LD_LIBRARY_PATH}:/usr/lib/x86_64-linux-gnu/
+WORKDIR /home/cnb 
 
 # ========== ADDED ===========
 # 7. Start a new build stage
@@ -184,3 +136,4 @@ RUN apt-get -y install git
 # ========== ADDED ===========
 # 9. Set user and group (as declared in base image)
 USER ${CNB_USER_ID}:${CNB_GROUP_ID}
+WORKDIR /home/cnb

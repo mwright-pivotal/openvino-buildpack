@@ -24,6 +24,6 @@ description = "Ubuntu bionic base image with buildpacks for Java, .NET Core, Nod
     version = "5.6.0"
 
 [stack]
-  build-image = "vmwedge.azurecr.io/openvino-stack-build:bionic"
+  build-image = "harbor.services.edge.wrightcode.io:9443/library/openvino-stack-build:bionic"
   id = "io.buildpacks.openvino.stacks.bionic"
-  run-image = "vmwedge.azurecr.io/openvino-stack-run:bionic"
+  run-image = "harbor.services.edge.wrightcode.io:9443/library/openvino-stack-run:bionic"

@@ -1,0 +1,23 @@
+apiVersion: stacks.stacks-operator.tanzu.vmware.com/v1alpha1
+kind: CustomStack
+metadata:
+  name: openvino-stack
+spec:
+  source:
+    registryImages:
+      build:
+              image: harbor.services.edge.wrightcode.io:9443/library/openvino-stack-build@sha256:fa413090499df7e9869ac9f93d033ddf2b618d50667744060417710bf9128550
+      run:
+              image: harbor.services.edge.wrightcode.io:9443/library/openvino-stack-run@sha256:c318bdd55547fa6639ca969436cfcf6f81eaab88d73708260b762b6d31e0c9ad
+  destination:
+    build:
+      tag: harbor.services.edge.wrightcode.io:9443/apps/final-build-image
+    run:
+      tag: harbor.services.edge.wrightcode.io:9443/apps/final-run-image
+    stack: # Optional
+      name: stack-sample-cluster-stack
+      kind: ClusterStack
+  serviceAccountName: default
+  user: # Optional
+    userID: 1000
+    groupID: 1000
