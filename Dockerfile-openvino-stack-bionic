@@ -1,9 +1,6 @@
 FROM ubuntu:bionic  as base
 LABEL maintainer="Mike Wright wrightmi@vmware.com"
 
-# Arguments
-ARG OPENVINO_VERSION=2020.2.120
-
 # Environments
 ENV DEBIAN_FRONTEND=noninteractive
 ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
