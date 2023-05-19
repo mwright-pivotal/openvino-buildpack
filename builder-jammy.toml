@@ -1,0 +1,29 @@
+description = "Ubuntu jammy base image with buildpacks for Java, .NET Core, NodeJS, Go, Python, PHP, Ruby, Apache HTTPD, NGINX and Procfile"
+
+[[buildpacks]]
+  uri = "docker://gcr.io/paketo-buildpacks/procfile:5.6.0"
+  version = "5.6.0"
+
+[[buildpacks]]
+  uri = "docker://gcr.io/paketo-buildpacks/python:2.8.0"
+  version = "2.8.0"
+
+[lifecycle]
+  version = "0.16.0"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/python"
+    version = "2.8.0"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/procfile"
+    version = "5.6.0"
+
+[stack]
+  build-image = "harbor.services.edge.wrightcode.io:9443/library/openvino-stack-build:jammy"
+  id = "io.buildpacks.openvino.stacks.jammy"
+  run-image = "harbor.services.edge.wrightcode.io:9443/library/openvino-stack-run:jammy"

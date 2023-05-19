@@ -15,7 +15,7 @@ spec:
     run:
       tag: harbor.services.edge.wrightcode.io:9443/apps/final-run-image
     stack: # Optional
-      name: stack-sample-cluster-stack
+      name: computer-vision-cluster-stack
       kind: ClusterStack
   serviceAccountName: default
   user: # Optional

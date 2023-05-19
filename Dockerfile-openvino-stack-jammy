@@ -1,0 +1,120 @@
+FROM  ubuntu:jammy as base
+LABEL maintainer="Mike Wright wrightmi@vmware.com"
+
+# Environments
+ENV DEBIAN_FRONTEND=noninteractive
+ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
+ENV PIP_DEFAULT_TIMEOUT=100
+# ========== ADDED ===========
+# 2. Set required CNB information
+ENV CNB_USER_ID=1000
+ENV CNB_GROUP_ID=1000
+ENV CNB_STACK_ID="io.buildpacks.openvino.stacks.jammy"
+LABEL io.buildpacks.stack.id="io.buildpacks.openvino.stacks.jammy"
+
+RUN groupadd cnb --gid ${CNB_GROUP_ID} && \
+  useradd --uid ${CNB_USER_ID} --gid ${CNB_GROUP_ID} -m -s /bin/bash cnb
+
+SHELL ["/bin/bash", "-xo", "pipefail", "-c"]
+
+ARG JOBS
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install --no-install-recommends -y \
+            build-essential \
+            gcc-9 \
+            g++-9 \
+            make \
+            cmake \
+            automake \
+            autoconf \
+            curl \
+            ca-certificates \
+            git \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev \
+            patch \
+            pkg-config \
+            wget \
+            zlib1g-dev && \
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 9 && \
+            update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 9 && \
+            apt-get clean && \
+            rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y software-properties-common gpg gpg-agent --no-install-recommends && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get install -y python3.8 python3.8-dev python3.8-distutils python3-pip --no-install-recommends && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 1 && \
+    python3 -m pip install numpy==1.21.0 --no-cache-dir
+
+ARG TEMP_DIR=/tmp/openvino_installer
+
+WORKDIR ${TEMP_DIR}
+
+COPY opencv /tmp/openvino_installer
+RUN ./install_opencv.sh
+####### End of OpenCV
+ARG ov_use_binary=0
+
+################### BUILD OPENVINO FROM SOURCE - buildarg ov_use_binary=0  ############################
+# Build OpenVINO and nGraph (OV dependency) with D_GLIBCXX_USE_CXX11_ABI=0 or 1
+# hadolint ignore=DL3003
+RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; git clone https://github.com/openvinotoolkit/openvino.git /openvino && cd /openvino && git checkout master && git submodule update --init --recursive
+WORKDIR /openvino/build
+RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; cmake -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DENABLE_SAMPLES=0 -DNGRAPH_USE_CXX_ABI=1 -DCMAKE_CXX_FLAGS=" -D_GLIBCXX_USE_CXX11_ABI=1 -Wno-error=parentheses "  ..
+RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; make --jobs=$JOBS
+RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; make install
+RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; \
+    mkdir -p /opt/intel/openvino/extras && \
+    mkdir -p /opt/intel/openvino && \
+    ln -s /openvino/inference-engine/temp/opencv_*_ubuntu20/opencv /opt/intel/openvino/extras && \
+    ln -s /usr/local/runtime /opt/intel/openvino && \
+    ln -s /openvino/scripts/setupvars/setupvars.sh /opt/intel/openvino/setupvars.sh && \
+    ln -s /opt/intel/openvino /opt/intel/openvino_2022
+################## END OF OPENVINO SOURCE BUILD ######################
+
+WORKDIR /tmp
+RUN wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.18_amd64.deb
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils && \
+  apt install -y intel-opencl-icd && \
+  apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt install ./libssl1.1_1.1.1f-1ubuntu2.18_amd64.deb
+
+# Video Libraries Dependencies
+# hadolint ignore=DL3008,DL3015
+RUN apt-get update && apt-get install -y \
+    fswebcam \
+    libavcodec-dev \
+    libavformat-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libswscale-dev \
+    libtiff-dev \
+    libv4l-dev \
+    v4l-utils \
+    libffi8 \
+    && \
+    apt-get clean -y && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/archives/
+
+RUN ln -s /usr/lib/x86_64-linux-gnu/libffi.so.8.1.0 /usr/lib/x86_64-linux-gnu/libffi.so.6
+ENV LD_LIBRARY_PATH=/opt/opencv/lib/:${LD_LIBRARY_PATH}:/usr/lib/x86_64-linux-gnu/
+# ========== ADDED ===========
+# 5. Start a new run stage
+FROM base as run
+
+# 6. Set user and group (as declared in base image)
+USER ${CNB_USER_ID}:${CNB_GROUP_ID}
+WORKDIR /home/cnb
+
+# ========== ADDED ===========
+# 7. Start a new build stage
+FROM base as build
+
+RUN apt-get -y install git
+# ========== ADDED ===========
+# 9. Set user and group (as declared in base image)
+USER ${CNB_USER_ID}:${CNB_GROUP_ID}
