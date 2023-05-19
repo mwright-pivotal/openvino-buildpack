@@ -118,3 +118,4 @@ RUN apt-get -y install git
 # ========== ADDED ===========
 # 9. Set user and group (as declared in base image)
 USER ${CNB_USER_ID}:${CNB_GROUP_ID}
+WORKDIR /home/cnb
