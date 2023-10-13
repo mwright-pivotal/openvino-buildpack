@@ -124,6 +124,8 @@ RUN ldconfig -p | grep -i intel
 # 6. Set user and group (as declared in base image)
 USER ${CNB_USER_ID}:${CNB_GROUP_ID}
 WORKDIR /home/cnb 
+RUN export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/lib/x86_64-linux-gnu/"
 
 # ========== ADDED ===========
 # 7. Start a new build stage

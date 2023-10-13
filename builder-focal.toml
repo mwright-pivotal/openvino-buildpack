@@ -24,6 +24,6 @@ description = "Ubuntu focal base image with buildpacks for Java, .NET Core, Node
     version = "5.6.0"
 
 [stack]
-  build-image = "harbor.services.edge.wrightcode.io:9443/library/openvino-stack-build:focal"
+  build-image = "mwrightpivotal/openvino-stack-build:focal"
   id = "io.buildpacks.openvino.stacks.focal"
-  run-image = "harbor.services.edge.wrightcode.io:9443/library/openvino-stack-run:focal"
+  run-image = "mwrightpivotal/openvino-stack-run:focal"

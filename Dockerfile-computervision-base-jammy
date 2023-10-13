@@ -9,8 +9,8 @@ ENV PIP_DEFAULT_TIMEOUT=100
 # 2. Set required CNB information
 ENV CNB_USER_ID=1000
 ENV CNB_GROUP_ID=1000
-ENV CNB_STACK_ID="io.buildpacks.openvino.stacks.jammy"
-LABEL io.buildpacks.stack.id="io.buildpacks.openvino.stacks.jammy"
+ENV CNB_STACK_ID="io.buildpacks.cv.stacks.jammy"
+LABEL io.buildpacks.stack.id="io.buildpacks.cv.stacks.jammy"
 
 RUN groupadd cnb --gid ${CNB_GROUP_ID} && \
   useradd --uid ${CNB_USER_ID} --gid ${CNB_GROUP_ID} -m -s /bin/bash cnb
@@ -49,43 +49,7 @@ RUN apt-get update && apt-get install -y software-properties-common gpg gpg-agen
     update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1 && \
     python3 -m pip install numpy==1.21.0 --no-cache-dir
 
-ARG TEMP_DIR=/tmp/openvino_installer
 
-WORKDIR ${TEMP_DIR}
-
-COPY opencv /tmp/openvino_installer
-RUN ./install_opencv.sh
-####### End of OpenCV
-ARG ov_use_binary=1
-
-################### BUILD OPENVINO FROM SOURCE - buildarg ov_use_binary=0  ############################
-# Build OpenVINO and nGraph (OV dependency) with D_GLIBCXX_USE_CXX11_ABI=0 or 1
-# hadolint ignore=DL3003
-RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; git clone https://github.com/openvinotoolkit/openvino.git /openvino && cd /openvino && git checkout master && git submodule update --init --recursive
-WORKDIR /openvino/build
-RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; cmake -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DENABLE_SAMPLES=0 -DNGRAPH_USE_CXX_ABI=1 -DCMAKE_CXX_FLAGS=" -D_GLIBCXX_USE_CXX11_ABI=1 -Wno-error=parentheses "  ..
-RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; make --jobs=$JOBS
-RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; make install
-RUN if [ "$ov_use_binary" == "0" ] ; then true ; else exit 0 ; fi ; \
-    mkdir -p /opt/intel/openvino/extras && \
-    mkdir -p /opt/intel/openvino && \
-    ln -s /openvino/inference-engine/temp/opencv_*_ubuntu20/opencv /opt/intel/openvino/extras && \
-    ln -s /usr/local/runtime /opt/intel/openvino && \
-    ln -s /openvino/scripts/setupvars/setupvars.sh /opt/intel/openvino/setupvars.sh && \
-    ln -s /opt/intel/openvino /opt/intel/openvino_2023
-RUN rm -r -f /openvino/build
-################## END OF OPENVINO SOURCE BUILD ######################
-
-RUN if [ "$ov_use_binary" == "1" ] ; then true ; else exit 0 ; fi ; \
-    wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
-    apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
-    echo "deb https://apt.repos.intel.com/openvino/2023 ubuntu22 main" | tee /etc/apt/sources.list.d/intel-openvino-2023.list 
-
-RUN if [ "$ov_use_binary" == "1" ] ; then true ; else exit 0 ; fi ; \
-    apt update && apt install -y openvino && \
-    apt-cache search openvino
-
-WORKDIR /tmp
 #RUN wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.18_amd64.deb
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils && \
   apt install -y intel-opencl-icd && \
@@ -115,12 +79,34 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libffi.so.8.1.0 /usr/lib/x86_64-linux-gnu/li
 ENV LD_LIBRARY_PATH=/opt/opencv/lib/:${LD_LIBRARY_PATH}:/usr/lib/x86_64-linux-gnu/
 # ========== ADDED ===========
 # 5. Start a new run stage
+# Install dependencies
+RUN apt-get update && apt-get install -y curl wget gpg software-properties-common
+
+# Register Intel® oneAPI APT repository
+RUN curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor --output /usr/share/keyrings/intel-sw-products.gpg
+RUN echo "deb [signed-by=/usr/share/keyrings/intel-sw-products.gpg] https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/intel-oneapi.list
+
+# Download Intel® Graphics APT repository key
+RUN curl -fsSL https://repositories.intel.com/graphics/intel-graphics.key | gpg --dearmor --output /usr/share/keyrings/intel-graphics.gpg
+
+# Register Intel® Graphics APT repository
+RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu jammy/production/2328 unified" | tee /etc/apt/sources.list.d/intel-graphics.list
+
+# Install
+RUN apt-get update && apt-get install -y intel-level-zero-gpu level-zero jq
+RUN wget $(wget -q -O - https://api.github.com/repos/dlstreamer/dlstreamer/releases/latest | \
+  jq -r '.assets[] | select(.name | contains (".deb")) | .browser_download_url')
+# Install Intel® DL Streamer
+RUN apt install -y ./*.deb
+
 FROM base as run
 
 # 6. Set user and group (as declared in base image)
 USER ${CNB_USER_ID}:${CNB_GROUP_ID}
 WORKDIR /home/cnb
+COPY entrypoint.sh .
 ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/lib/x86_64-linux-gnu/"
+ENTRYPOINT ["/home/cnb/entrypoint.sh"]
 
 # ========== ADDED ===========
 # 7. Start a new build stage
