@@ -24,7 +24,7 @@ Modify builder-jammy to reference your run and build container locations
 ```console
 pack builder create openvino-builder:jammy --config ./builder-jammy.toml -v
 ```
-# Base Computer Vision Builder
+# Base Computer Vision Builder (includes Intel dlStreamer but not Openvino)
 
 ```
 docker build -t ${MYREG}/cv-stack-base:1.0 --target base . -f Dockerfile-computervision-base-jammy
