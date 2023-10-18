@@ -20,13 +20,6 @@ SHELL ["/bin/bash", "-xo", "pipefail", "-c"]
 ARG JOBS=4
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install --no-install-recommends -y \
-            build-essential \
-            gcc-9 \
-            g++-9 \
-            make \
-            cmake \
-            automake \
-            autoconf \
             curl \
             ca-certificates \
             git \
@@ -37,18 +30,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
             pkg-config \
             wget \
             zlib1g-dev && \
-            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 9 && \
-            update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 9 && \
             apt-get clean && \
             rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update && apt-get install -y software-properties-common gpg gpg-agent --no-install-recommends && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get install -y python3.9 python3.9-dev python3.9-distutils python3-pip --no-install-recommends && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && \
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1 && \
-    python3 -m pip install numpy==1.21.0 --no-cache-dir
-
 
 #RUN wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.18_amd64.deb
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils && \
@@ -98,6 +81,7 @@ RUN wget $(wget -q -O - https://api.github.com/repos/dlstreamer/dlstreamer/relea
   jq -r '.assets[] | select(.name | contains (".deb")) | .browser_download_url')
 # Install Intel® DL Streamer
 RUN apt install -y ./*.deb
+RUN rm -f ./*.deb
 
 FROM base as run
 
