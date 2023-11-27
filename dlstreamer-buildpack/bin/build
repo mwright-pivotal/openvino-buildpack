@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+layers_dir="$1"
+env_dir="$2/env"
+plan_path="$3"
+
+echo "---> DLstreamer Buildpack"
+
+dlstreamerlayer="$layers_dir"/dlstreamer
+mkdir -p "$dlstreamerlayer"
+USE_INTEL_MODEL=$(jq -r .openvino_zoo pipeline.json)
+DETECTION_MODEL=$(jq -r .detection_model pipeline.json)
+if [[ $USE_INTEL_MODEL == "true" ]]; then
+  export PKG_CONFIG_PATH=.
+  export LIBRARY_PATH=.
+  MODEL_PREC=$(jq -r .model_precision pipeline.json)
+  . /opt/intel/openvino_2023/setupvars.sh -pyver 3.9
+  . /opt/intel/dlstreamer/setupvars.sh
+  /usr/local/bin/omz_downloader --name ${DETECTION_MODEL} --precisions ${MODEL_PREC} -o model --num_attempts 5
+  if [ -d "model/intel" ]; then
+    DETECTION_MODEL="model/intel/${DETECTION_MODEL}/${MODEL_PREC}/${DETECTION_MODEL}.xml"
+  else
+    DETECTION_MODEL="model/public/${DETECTION_MODEL}/${MODEL_PREC}/${DETECTION_MODEL}.xml"
+  fi
+fi
+
+DETECTION_MODEL_PROC=$(jq -r .detection_model_proc pipeline.json)
+
+PUBLISH_TYPE=$(jq -r .publish_type pipeline.json)
+SOURCE=$(jq -r .source pipeline.json)
+DEVICE=GPU
+
+if [[ $SOURCE == "/dev/video"* ]]; then
+  SOURCE_ELEMENT="v4l2src device=${SOURCE}"
+elif [[ $SOURCE == *"://"* ]]; then
+  SOURCE_ELEMENT="urisourcebin buffer-size=4096 uri=${SOURCE}"
+else
+  SOURCE_ELEMENT="filesrc location=${SOURCE}"
+fi
+
+echo ${SOURCE_ELEMENT}
+
+if [[ $PUBLISH_TYPE == "mqtt" ]]; then
+  MQTT_ADDRESS=$(jq -r .mqtt_endpoint pipeline.json)
+  SINK_ELEMENT="gvametaconvert json-indent=4 ! queue ! gvametapublish method=mqtt mqtt-client-id=blackjack max-connect-attempts=10 address=${MQTT_ADDRESS} topic=t/1 ! fakesink async=false"
+else
+  SINK_ELEMENT="gvametaconvert tags=camera1 ! gvametapublish file-format=json-lines file-path=output.json ! fakesink async=false"
+fi
+
+if [[ $PUBLISH_TYPE == "mqtt" ]]; then
+  COMMAND=". /opt/intel/dlstreamer/setupvars.sh && gst-launch-1.0 ${SOURCE_ELEMENT} ! decodebin ! gvadetect model=${DETECTION_MODEL} model_proc=${DETECTION_MODEL_PROC} device=${DEVICE} ! queue ! ${SINK_ELEMENT}"
+else
+  echo "*** Inference results will be written to output.json.  Use only for automated tests. ***"
+  COMMAND=". /opt/intel/dlstreamer/setupvars.sh && gst-launch-1.0 ${SOURCE_ELEMENT} ! decodebin ! gvadetect model=${DETECTION_MODEL} model_proc=${DETECTION_MODEL_PROC} device=${DEVICE} ! queue ! ${SINK_ELEMENT} & tail -F output.json"
+fi
+
+echo -e '[types]\nlaunch = true' > "$layers_dir/dlstreamer.toml"
+
+echo ${COMMAND}
+
+# Set default start command
+
+cat << EOL
+[[processes]]
+type = "worker"
+command = "${COMMAND}"\n
+default = true
+EOL
+
+cat > "$layers_dir/launch.toml" << EOL
+[[processes]]
+type = "worker"
+command = "${COMMAND}"
+default = true
+EOL
+

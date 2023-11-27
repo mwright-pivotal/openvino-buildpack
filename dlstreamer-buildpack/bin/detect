@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -eo pipefail
+if [[ ! -f pipeline.json ]]; then
+   exit 100
+fi

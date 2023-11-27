@@ -23,7 +23,9 @@ description = "Ubuntu jammy base image with buildpacks for Java, .NET Core, Node
     id = "paketo-buildpacks/procfile"
     version = "5.6.0"
 
-[stack]
-  build-image = "mwrightpivotal/cv-stack-build:1.0"
-  id = "io.buildpacks.cv.stacks.jammy"
-  run-image = "mwrightpivotal/cv-stack-run:1.0"
+# Base images used to create the builder
+[build]
+image = "mwrightpivotal/cv-stack-build:1.0"
+[run]
+[[run.images]]
+image = "mwrightpivotal/cv-stack-build:1.0"

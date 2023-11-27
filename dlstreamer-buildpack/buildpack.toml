@@ -1,0 +1,9 @@
+api = "0.8"
+
+[buildpack]
+  id = "dlstreamer-buildpack"
+  version = "0.0.1"
+
+# Targets the buildpack will work with
+[[targets]]
+os = "linux"

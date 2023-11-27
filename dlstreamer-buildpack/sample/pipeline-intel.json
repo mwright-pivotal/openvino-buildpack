@@ -1,0 +1,13 @@
+{
+	"type": "GStreamer",
+	"openvino_zoo": "true",
+	"detection_model": "person-detection-0303",
+	"model_precision": "FP16",
+	"input_layer": "image",
+	"detection_model_proc": "model/person-detection-0303-model-proc.json",
+	"description": "DLStreamer Buildpack App",
+	"publish_type": "mqtt",
+	"mqtt_endpoint": "192.168.0.5:1883",
+	"mqtt_topic": "t/1",
+	"source": "rtsp://192.168.0.30/axis-media/media.amp?videocodec=h264"
+}

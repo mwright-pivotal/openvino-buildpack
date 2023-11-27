@@ -1,0 +1,11 @@
+{
+	"type": "GStreamer",
+	"download_model": "false",
+	"detection_model": "model/cards-yolov5-ov.xml",
+	"detection_model_proc": "model/blackjack-model-proc-v2.json",
+	"description": "DLStreamer Buildpack App",
+	"publish_type": "file",
+	"mqtt_endpoint": "localhost:1813",
+	"mqtt_topic": "t/1",
+	"source": "cards-sample.m4v"
+}

@@ -11,6 +11,9 @@ ENV CNB_USER_ID=1000
 ENV CNB_GROUP_ID=1000
 ENV CNB_STACK_ID="io.buildpacks.cv.stacks.jammy"
 LABEL io.buildpacks.stack.id="io.buildpacks.cv.stacks.jammy"
+# Set required CNB target information
+LABEL io.buildpacks.base.distro.name="OPENVINO_2023_BASE"
+LABEL io.buildpacks.base.distro.version="1.0"
 
 RUN groupadd cnb --gid ${CNB_GROUP_ID} && \
   useradd --uid ${CNB_USER_ID} --gid ${CNB_GROUP_ID} -m -s /bin/bash cnb
@@ -76,12 +79,14 @@ RUN curl -fsSL https://repositories.intel.com/graphics/intel-graphics.key | gpg 
 RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu jammy/production/2328 unified" | tee /etc/apt/sources.list.d/intel-graphics.list
 
 # Install
-RUN apt-get update && apt-get install -y intel-level-zero-gpu level-zero jq
+RUN apt-get update && apt-get install -y intel-level-zero-gpu level-zero jq intel-mkl
 RUN wget $(wget -q -O - https://api.github.com/repos/dlstreamer/dlstreamer/releases/latest | \
   jq -r '.assets[] | select(.name | contains (".deb")) | .browser_download_url')
 # Install Intel® DL Streamer
+RUN apt remove -y libtbb2-dev
 RUN apt install -y ./*.deb
 RUN rm -f ./*.deb
+RUN /opt/intel/dlstreamer/install_dependencies/install_mqtt_client.sh
 
 FROM base as run
 
@@ -96,7 +101,9 @@ ENTRYPOINT ["/home/cnb/entrypoint.sh"]
 # 7. Start a new build stage
 FROM base as build
 
-RUN apt-get -y install git
+RUN apt-get -y install git jq
+RUN /opt/intel/dlstreamer/install_dependencies/install_openvino.sh
+RUN pip install openvino-dev
 # ========== ADDED ===========
 # 9. Set user and group (as declared in base image)
 USER ${CNB_USER_ID}:${CNB_GROUP_ID}
